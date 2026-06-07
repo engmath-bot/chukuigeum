@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>축의금 관리</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #c0392b;
+      color: white;
+      padding: 20px 24px;
+    }
+    header h1 { font-size: 1.4rem; font-weight: 700; }
+    header p { font-size: 0.85rem; opacity: 0.85; margin-top: 2px; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      padding: 16px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .card .label { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
+    .card .value { font-size: 1.3rem; font-weight: 700; color: #c0392b; }
+    .card .value.dark { color: #222; }
+
+    .form-section {
+      background: white;
+      margin: 0 16px 16px;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .form-section h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 12px; }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 0.75rem; color: #666; }
+    input, select {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.9rem;
+      outline: none;
+      width: 100%;
+    }
+    input:focus, select:focus { border-color: #c0392b; }
+
+    .quick-amounts {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .quick-btn {
+      background: #fdecea;
+      color: #c0392b;
+      border: none;
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .quick-btn:hover { background: #f5b7b1; }
+
+    .add-btn {
+      background: #c0392b;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 16px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .add-btn:hover { background: #a93226; }
+
+    .list-section {
+      margin: 0 16px 24px;
+    }
+    .list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .list-header h2 { font-size: 0.95rem; font-weight: 600; }
+
+    .filter-bar {
+      display: flex;
+      gap: 6px;
+    }
+    .filter-bar select, .filter-bar input {
+      font-size: 0.8rem;
+      padding: 5px 8px;
+      width: auto;
+    }
+
+    table {
+      width: 100%;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      border-collapse: collapse;
+    }
+    thead { background: #fdecea; }
+    th {
+      padding: 10px 12px;
+      font-size: 0.78rem;
+      color: #c0392b;
+      text-align: left;
+      font-weight: 600;
+    }
+    td {
+      padding: 10px 12px;
+      font-size: 0.85rem;
+      border-top: 1px solid #f2f2f2;
+    }
+    tr:hover td { background: #fafafa; }
+
+    .amount-cell { font-weight: 600; color: #c0392b; }
+    .rel-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.73rem;
+      font-weight: 500;
+    }
+    .del-btn {
+      background: none;
+      border: none;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0 4px;
+    }
+    .del-btn:hover { color: #c0392b; }
+
+    .empty-msg {
+      text-align: center;
+      color: #aaa;
+      padding: 40px;
+      font-size: 0.9rem;
+    }
+
+    .export-btn {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: #555;
+    }
+    .export-btn:hover { background: #f5f5f5; }
+
+    @media (max-width: 600px) {
+      .form-row { grid-template-columns: 1fr 1fr; }
+      .summary { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>💐 축의금 관리</h1>
+  <p>하객별 축의금을 기록하고 합계를 확인하세요</p>
+</header>
+
+<div class="summary">
+  <div class="card">
+    <div class="label">총 축의금</div>
+    <div class="value" id="totalAmount">0원</div>
+  </div>
+  <div class="card">
+    <div class="label">하객 수</div>
+    <div class="value dark" id="totalGuests">0명</div>
+  </div>
+  <div class="card">
+    <div class="label">평균 금액</div>
+    <div class="value dark" id="avgAmount">0원</div>
+  </div>
+</div>
+
+<div class="form-section">
+  <h2>➕ 추가</h2>
+  <div class="form-row">
+    <div class="form-group">
+      <label>이름</label>
+      <input id="nameInput" type="text" placeholder="홍길동" />
+    </div>
+    <div class="form-group">
+      <label>금액 (원)</label>
+      <input id="amountInput" type="number" placeholder="50000" min="0" step="10000" />
+    </div>
+    <div class="form-group">
+      <label>관계</label>
+      <select id="relInput">
+        <option value="친구">친구</option>
+        <option value="직장">직장</option>
+        <option value="친척">친척</option>
+        <option value="지인">지인</option>
+        <option value="기타">기타</option>
+      </select>
+    </div>
+    <button class="add-btn" id="addBtn">추가</button>
+  </div>
+  <div class="quick-amounts">
+    <span style="font-size:0.75rem;color:#999;line-height:26px;">빠른입력:</span>
+    <button class="quick-btn" data-amount="30000">3만</button>
+    <button class="quick-btn" data-amount="50000">5만</button>
+    <button class="quick-btn" data-amount="70000">7만</button>
+    <button class="quick-btn" data-amount="100000">10만</button>
+    <button class="quick-btn" data-amount="200000">20만</button>
+    <button class="quick-btn" data-amount="300000">30만</button>
+    <button class="quick-btn" data-amount="500000">50만</button>
+  </div>
+</div>
+
+<div class="list-section">
+  <div class="list-header">
+    <h2>📋 명단</h2>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="filter-bar">
+        <select id="filterRel">
+          <option value="">전체</option>
+          <option value="친구">친구</option>
+          <option value="직장">직장</option>
+          <option value="친척">친척</option>
+          <option value="지인">지인</option>
+          <option value="기타">기타</option>
+        </select>
+        <input id="searchInput" type="text" placeholder="이름 검색" style="width:100px" />
+      </div>
+      <button class="export-btn" id="exportBtn">CSV 저장</button>
+    </div>
+  </div>
+  <div id="tableContainer"></div>
+</div>
+
+<script>
+const REL_COLORS = {
+  친구: { bg: '#eaf4fb', color: '#2980b9' },
+  직장: { bg: '#eafaf1', color: '#27ae60' },
+  친척: { bg: '#fef9e7', color: '#d4ac0d' },
+  지인: { bg: '#f4ecf7', color: '#8e44ad' },
+  기타: { bg: '#f2f3f4', color: '#5d6d7e' },
+};
+
+let entries = JSON.parse(localStorage.getItem('chukuigeum') || '[]');
+
+function save() {
+  localStorage.setItem('chukuigeum', JSON.stringify(entries));
+}
+
+function formatWon(n) {
+  return n.toLocaleString('ko-KR') + '원';
+}
+
+function setAmount(n) {
+  document.getElementById('amountInput').value = n;
+}
+
+function addEntry() {
+  const name = document.getElementById('nameInput').value.trim();
+  const amount = parseInt(document.getElementById('amountInput').value);
+  const rel = document.getElementById('relInput').value;
+
+  if (!name) { alert('이름을 입력하세요.'); return; }
+  if (!amount || amount <= 0) { alert('금액을 입력하세요.'); return; }
+
+  entries.unshift({ id: Date.now(), name, amount, rel, date: new Date().toLocaleDateString('ko-KR') });
+  save();
+  render();
+
+  document.getElementById('nameInput').value = '';
+  document.getElementById('amountInput').value = '';
+  document.getElementById('nameInput').focus();
+}
+
+function deleteEntry(id) {
+  if (!confirm('삭제하시겠습니까?')) return;
+  entries = entries.filter(e => e.id !== id);
+  save();
+  render();
+}
+
+function filteredEntries() {
+  const rel = document.getElementById('filterRel').value;
+  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+  return entries.filter(e =>
+    (!rel || e.rel === rel) &&
+    (!search || e.name.toLowerCase().includes(search))
+  );
+}
+
+function render() {
+  const list = filteredEntries();
+  const total = entries.reduce((s, e) => s + e.amount, 0);
+  const avg = entries.length ? Math.round(total / entries.length) : 0;
+
+  document.getElementById('totalAmount').textContent = formatWon(total);
+  document.getElementById('totalGuests').textContent = entries.length + '명';
+  document.getElementById('avgAmount').textContent = formatWon(avg);
+
+  const container = document.getElementById('tableContainer');
+  if (list.length === 0) {
+    container.innerHTML = '<div class="empty-msg">아직 등록된 하객이 없습니다.</div>';
+    return;
+  }
+
+  const rows = list.map(e => {
+    const c = REL_COLORS[e.rel] || REL_COLORS['기타'];
+    return `<tr>
+      <td>${e.date}</td>
+      <td><strong>${e.name}</strong></td>
+      <td><span class="rel-badge" style="background:${c.bg};color:${c.color}">${e.rel}</span></td>
+      <td class="amount-cell">${formatWon(e.amount)}</td>
+      <td><button class="del-btn" data-id="${e.id}" title="삭제">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>날짜</th><th>이름</th><th>관계</th><th>금액</th><th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function exportCSV() {
+  if (!entries.length) { alert('데이터가 없습니다.'); return; }
+  const header = '날짜,이름,관계,금액\n';
+  const rows = entries.map(e => `${e.date},${e.name},${e.rel},${e.amount}`).join('\n');
+  const blob = new Blob(['﻿' + header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '축의금_' + new Date().toLocaleDateString('ko-KR').replace(/\. /g, '-').replace('.', '') + '.csv';
+  a.click();
+}
+
+document.getElementById('addBtn').addEventListener('click', addEntry);
+
+document.getElementById('nameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('amountInput').focus();
+});
+document.getElementById('amountInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addEntry();
+});
+
+document.querySelectorAll('.quick-btn').forEach(btn => {
+  btn.addEventListener('click', () => setAmount(parseInt(btn.dataset.amount)));
+});
+
+document.getElementById('filterRel').addEventListener('change', render);
+document.getElementById('searchInput').addEventListener('input', render);
+document.getElementById('exportBtn').addEventListener('click', exportCSV);
+
+document.getElementById('tableContainer').addEventListener('click', e => {
+  const btn = e.target.closest('.del-btn');
+  if (btn) deleteEntry(parseInt(btn.dataset.id));
+});
+
+render();
+</script>
+</body>
+</html>
