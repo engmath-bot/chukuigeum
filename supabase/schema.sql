@@ -139,6 +139,26 @@ begin
 end;
 $$;
 
+create or replace function public.list_rooms()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, extensions, private
+as $$
+  select jsonb_build_object(
+    'ok', true,
+    'rooms', coalesce(
+      jsonb_agg(
+        jsonb_build_object('code', code, 'title', title, 'createdAt', created_at)
+        order by created_at desc
+      ),
+      '[]'::jsonb
+    )
+  )
+  from public.rooms;
+$$;
+
 create or replace function public.join_room(p_room_code text, p_pin text, p_attempt_key text)
 returns jsonb
 language plpgsql
@@ -316,6 +336,7 @@ end;
 $$;
 
 revoke all on function public.create_room(text, text) from public;
+revoke all on function public.list_rooms() from public;
 revoke all on function public.join_room(text, text, text) from public;
 revoke all on function public.get_room(text) from public;
 revoke all on function public.add_entry(text, text, bigint, text) from public;
@@ -324,6 +345,7 @@ revoke all on function public.delete_entry(text, uuid) from public;
 revoke all on function public.leave_room(text) from public;
 
 grant execute on function public.create_room(text, text) to anon, authenticated;
+grant execute on function public.list_rooms() to anon, authenticated;
 grant execute on function public.join_room(text, text, text) to anon, authenticated;
 grant execute on function public.get_room(text) to anon, authenticated;
 grant execute on function public.add_entry(text, text, bigint, text) to anon, authenticated;
