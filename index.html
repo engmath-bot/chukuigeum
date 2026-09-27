@@ -17,7 +17,6 @@
       </button>
       <div class="room-header" id="roomHeader" hidden>
         <span class="room-title" id="headerRoomTitle"></span>
-        <span class="room-code" id="headerRoomCode"></span>
         <button class="hero-btn" id="shareBtn" type="button">링크 복사</button>
         <button class="hero-btn" id="leaveBtn" type="button">나가기</button>
       </div>
@@ -34,20 +33,23 @@
         </div>
         <div id="lobbyContent">
           <div class="tabs" role="tablist" aria-label="방 입장 방식">
-            <button class="tab active" id="joinTab" type="button" role="tab" aria-selected="true">방 입장</button>
+            <button class="tab active" id="joinTab" type="button" role="tab" aria-selected="true">방 선택</button>
             <button class="tab" id="createTab" type="button" role="tab" aria-selected="false">새 방 만들기</button>
           </div>
 
           <form class="stack" id="joinForm" novalidate>
-            <div><h2 class="section-title">기존 방에 입장</h2><p class="section-copy">방 코드와 4자리 PIN을 입력하세요.</p></div>
-            <div class="form-group"><label for="joinCode">방 코드</label><input id="joinCode" maxlength="6" placeholder="예: A7K2M9" autocapitalize="characters" autocomplete="off" /></div>
-            <div class="form-group"><label for="joinPin">4자리 PIN</label><input class="pin-input" id="joinPin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" autocomplete="current-password" /></div>
-            <button class="primary-btn" id="joinBtn" type="submit">입장하기</button>
-            <p class="form-message" id="joinMessage" role="alert"></p>
+            <div><h2 class="section-title">결혼식 선택</h2><p class="section-copy">입장할 결혼식을 선택하세요.</p></div>
+            <div class="room-list" id="roomList" aria-live="polite"></div>
+            <div class="room-pin-panel" id="roomPinPanel" hidden>
+              <div class="selected-room-row"><div><span class="selected-label">선택한 결혼식</span><strong id="selectedRoomTitle"></strong></div><button class="text-btn" id="changeRoomBtn" type="button">다시 선택</button></div>
+              <div class="form-group"><label for="joinPin">4자리 PIN</label><input class="pin-input" id="joinPin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" autocomplete="current-password" /></div>
+              <button class="primary-btn" id="joinBtn" type="submit">입장하기</button>
+              <p class="form-message" id="joinMessage" role="alert"></p>
+            </div>
           </form>
 
           <form class="stack" id="createForm" novalidate hidden>
-            <div><h2 class="section-title">새 결혼식 방 만들기</h2><p class="section-copy">방마다 별도의 명단이 만들어집니다. 함께 기록할 사람에게 방 링크와 PIN을 알려주세요.</p></div>
+            <div><h2 class="section-title">새 결혼식 방 만들기</h2><p class="section-copy">방마다 별도의 명단이 만들어집니다. 함께 기록할 사람에게 방 제목과 PIN을 알려주세요.</p></div>
             <div class="form-group"><label for="roomTitleInput">결혼식 이름</label><input id="roomTitleInput" maxlength="60" placeholder="예: 민수 · 지영 결혼식" autocomplete="off" /></div>
             <div class="form-group"><label for="createPin">4자리 PIN</label><input class="pin-input" id="createPin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" autocomplete="new-password" /></div>
             <div class="form-group"><label for="confirmPin">PIN 확인</label><input class="pin-input" id="confirmPin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" autocomplete="new-password" /></div>
