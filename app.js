@@ -188,9 +188,29 @@ function renderMasterRooms() {
     const label = document.createElement('label');
     label.textContent = `${item.title} 이름 수정`;
     const input = document.createElement('input');
+    input.className = 'master-room-title-input';
     input.value = item.title;
     input.maxLength = 60;
     input.setAttribute('aria-label', `${item.title} 새 이름`);
+    const pinFields = document.createElement('div');
+    pinFields.className = 'master-pin-fields';
+    const newPin = document.createElement('input');
+    newPin.className = 'master-new-pin';
+    newPin.type = 'password';
+    newPin.inputMode = 'numeric';
+    newPin.maxLength = 4;
+    newPin.placeholder = '새 PIN 4자리';
+    newPin.autocomplete = 'new-password';
+    newPin.setAttribute('aria-label', `${item.title} 새 PIN 4자리`);
+    const confirmPin = document.createElement('input');
+    confirmPin.className = 'master-confirm-pin';
+    confirmPin.type = 'password';
+    confirmPin.inputMode = 'numeric';
+    confirmPin.maxLength = 4;
+    confirmPin.placeholder = '새 PIN 확인';
+    confirmPin.autocomplete = 'new-password';
+    confirmPin.setAttribute('aria-label', `${item.title} 새 PIN 확인`);
+    pinFields.append(newPin, confirmPin);
     const actions = document.createElement('div');
     actions.className = 'master-room-actions';
     const save = document.createElement('button');
@@ -203,8 +223,13 @@ function renderMasterRooms() {
     remove.className = 'secondary-btn danger-btn';
     remove.dataset.masterAction = 'delete';
     remove.textContent = '방 삭제';
+    const changePin = document.createElement('button');
+    changePin.type = 'button';
+    changePin.className = 'secondary-btn master-pin-save';
+    changePin.dataset.masterAction = 'change-pin';
+    changePin.textContent = 'PIN 변경';
     actions.append(save, remove);
-    row.append(label, input, actions);
+    row.append(label, input, actions, pinFields, changePin);
     list.append(row);
   });
 }
@@ -350,7 +375,7 @@ function handleMasterError(error) {
 
 async function masterRenameRoom(row, button) {
   const code = row.dataset.roomCode;
-  const title = row.querySelector('input').value.trim();
+  const title = row.querySelector('.master-room-title-input').value.trim();
   if (!title || title.length > 60) {
     $('masterMessage').textContent = '결혼식 이름을 1~60자로 입력해 주세요.';
     return;
@@ -364,6 +389,31 @@ async function masterRenameRoom(row, button) {
     renderMasterRooms();
     if (selectedRoomCode === code) $('selectedRoomTitle').textContent = title;
     $('masterMessage').textContent = '결혼식 이름을 변경했습니다.';
+  } catch (error) { handleMasterError(error); }
+  finally { setBusy(button, false); }
+}
+
+async function masterChangeRoomPin(row, button) {
+  const code = row.dataset.roomCode;
+  const pinInput = row.querySelector('.master-new-pin');
+  const confirmInput = row.querySelector('.master-confirm-pin');
+  const pin = pinInput.value;
+  if (!/^[0-9]{4}$/.test(pin)) {
+    $('masterMessage').textContent = '새 PIN을 숫자 4자리로 입력해 주세요.';
+    return;
+  }
+  if (pin !== confirmInput.value) {
+    $('masterMessage').textContent = '새 PIN 확인 값이 일치하지 않습니다.';
+    return;
+  }
+  setBusy(button, true, '변경 중…');
+  try {
+    const data = await rpc('master_change_room_pin', { p_master_token: masterToken, p_room_code: code, p_new_pin: pin });
+    if (!data.ok) throw new Error(data.error);
+    pinInput.value = '';
+    confirmInput.value = '';
+    localStorage.removeItem(sessionKey(code));
+    $('masterMessage').textContent = '방 PIN을 변경했습니다. 기존 접속은 종료되며 새 PIN으로 다시 입장해야 합니다.';
   } catch (error) { handleMasterError(error); }
   finally { setBusy(button, false); }
 }
@@ -582,7 +632,13 @@ function bindEvents() {
     if (!row) return;
     $('masterMessage').textContent = '';
     if (button.dataset.masterAction === 'rename') masterRenameRoom(row, button);
+    else if (button.dataset.masterAction === 'change-pin') masterChangeRoomPin(row, button);
     else masterDeleteRoom(row, button);
+  });
+  $('masterRoomList').addEventListener('input', event => {
+    if (event.target.matches('.master-new-pin, .master-confirm-pin')) {
+      event.target.value = event.target.value.replace(/\D/g, '').slice(0, 4);
+    }
   });
   $('entryForm').addEventListener('submit', submitEntry);
   $('cancelEditBtn').addEventListener('click', resetEntryForm);
