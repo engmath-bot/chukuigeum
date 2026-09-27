@@ -3,392 +3,101 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#a33a31" />
+  <meta name="description" content="결혼식별로 안전하게 공유하는 축의금 관리" />
   <title>축의금 관리</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f5f5f5;
-      color: #222;
-      min-height: 100vh;
-    }
-
-    header {
-      background: #c0392b;
-      color: white;
-      padding: 20px 24px;
-    }
-    header h1 { font-size: 1.4rem; font-weight: 700; }
-    header p { font-size: 0.85rem; opacity: 0.85; margin-top: 2px; }
-
-    .summary {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      padding: 16px;
-    }
-    .card {
-      background: white;
-      border-radius: 12px;
-      padding: 16px;
-      text-align: center;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-    }
-    .card .label { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
-    .card .value { font-size: 1.3rem; font-weight: 700; color: #c0392b; }
-    .card .value.dark { color: #222; }
-
-    .form-section {
-      background: white;
-      margin: 0 16px 16px;
-      border-radius: 12px;
-      padding: 16px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-    }
-    .form-section h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 12px; }
-
-    .form-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr auto;
-      gap: 8px;
-      align-items: end;
-    }
-    .form-group { display: flex; flex-direction: column; gap: 4px; }
-    .form-group label { font-size: 0.75rem; color: #666; }
-    input, select {
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-size: 0.9rem;
-      outline: none;
-      width: 100%;
-    }
-    input:focus, select:focus { border-color: #c0392b; }
-
-    .quick-amounts {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin-top: 8px;
-    }
-    .quick-btn {
-      background: #fdecea;
-      color: #c0392b;
-      border: none;
-      border-radius: 20px;
-      padding: 4px 12px;
-      font-size: 0.8rem;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .quick-btn:hover { background: #f5b7b1; }
-
-    .add-btn {
-      background: #c0392b;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      padding: 9px 16px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .add-btn:hover { background: #a93226; }
-
-    .list-section {
-      margin: 0 16px 24px;
-    }
-    .list-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .list-header h2 { font-size: 0.95rem; font-weight: 600; }
-
-    .filter-bar {
-      display: flex;
-      gap: 6px;
-    }
-    .filter-bar select, .filter-bar input {
-      font-size: 0.8rem;
-      padding: 5px 8px;
-      width: auto;
-    }
-
-    table {
-      width: 100%;
-      background: white;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-      border-collapse: collapse;
-    }
-    thead { background: #fdecea; }
-    th {
-      padding: 10px 12px;
-      font-size: 0.78rem;
-      color: #c0392b;
-      text-align: left;
-      font-weight: 600;
-    }
-    td {
-      padding: 10px 12px;
-      font-size: 0.85rem;
-      border-top: 1px solid #f2f2f2;
-    }
-    tr:hover td { background: #fafafa; }
-
-    .amount-cell { font-weight: 600; color: #c0392b; }
-    .rel-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 0.73rem;
-      font-weight: 500;
-    }
-    .del-btn {
-      background: none;
-      border: none;
-      color: #ccc;
-      cursor: pointer;
-      font-size: 1rem;
-      padding: 0 4px;
-    }
-    .del-btn:hover { color: #c0392b; }
-
-    .empty-msg {
-      text-align: center;
-      color: #aaa;
-      padding: 40px;
-      font-size: 0.9rem;
-    }
-
-    .export-btn {
-      background: white;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 6px 12px;
-      font-size: 0.8rem;
-      cursor: pointer;
-      color: #555;
-    }
-    .export-btn:hover { background: #f5f5f5; }
-
-    @media (max-width: 600px) {
-      .form-row { grid-template-columns: 1fr 1fr; }
-      .summary { grid-template-columns: 1fr; }
-    }
-  </style>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-
-<header>
-  <h1>💐 축의금 관리</h1>
-  <p>하객별 축의금을 기록하고 합계를 확인하세요</p>
-</header>
-
-<div class="summary">
-  <div class="card">
-    <div class="label">총 축의금</div>
-    <div class="value" id="totalAmount">0원</div>
-  </div>
-  <div class="card">
-    <div class="label">하객 수</div>
-    <div class="value dark" id="totalGuests">0명</div>
-  </div>
-  <div class="card">
-    <div class="label">평균 금액</div>
-    <div class="value dark" id="avgAmount">0원</div>
-  </div>
-</div>
-
-<div class="form-section">
-  <h2>➕ 추가</h2>
-  <div class="form-row">
-    <div class="form-group">
-      <label>이름</label>
-      <input id="nameInput" type="text" placeholder="홍길동" />
-    </div>
-    <div class="form-group">
-      <label>금액 (원)</label>
-      <input id="amountInput" type="number" placeholder="50000" min="0" step="10000" />
-    </div>
-    <div class="form-group">
-      <label>관계</label>
-      <select id="relInput">
-        <option value="친구">친구</option>
-        <option value="직장">직장</option>
-        <option value="친척">친척</option>
-        <option value="지인">지인</option>
-        <option value="기타">기타</option>
-      </select>
-    </div>
-    <button class="add-btn" id="addBtn">추가</button>
-  </div>
-  <div class="quick-amounts">
-    <span style="font-size:0.75rem;color:#999;line-height:26px;">빠른입력:</span>
-    <button class="quick-btn" data-amount="30000">3만</button>
-    <button class="quick-btn" data-amount="50000">5만</button>
-    <button class="quick-btn" data-amount="70000">7만</button>
-    <button class="quick-btn" data-amount="100000">10만</button>
-    <button class="quick-btn" data-amount="200000">20만</button>
-    <button class="quick-btn" data-amount="300000">30만</button>
-    <button class="quick-btn" data-amount="500000">50만</button>
-  </div>
-</div>
-
-<div class="list-section">
-  <div class="list-header">
-    <h2>📋 명단</h2>
-    <div style="display:flex;gap:8px;align-items:center">
-      <div class="filter-bar">
-        <select id="filterRel">
-          <option value="">전체</option>
-          <option value="친구">친구</option>
-          <option value="직장">직장</option>
-          <option value="친척">친척</option>
-          <option value="지인">지인</option>
-          <option value="기타">기타</option>
-        </select>
-        <input id="searchInput" type="text" placeholder="이름 검색" style="width:100px" />
+  <header class="hero">
+    <div class="hero-inner hero-row">
+      <button class="brand" id="homeBtn" type="button" aria-label="처음으로">
+        <h1>💐 축의금 관리</h1>
+        <p>결혼식별로 소중한 마음을 함께 기록하세요.</p>
+      </button>
+      <div class="room-header" id="roomHeader" hidden>
+        <span class="room-title" id="headerRoomTitle"></span>
+        <span class="room-code" id="headerRoomCode"></span>
+        <button class="hero-btn" id="shareBtn" type="button">링크 복사</button>
+        <button class="hero-btn" id="leaveBtn" type="button">나가기</button>
       </div>
-      <button class="export-btn" id="exportBtn">CSV 저장</button>
     </div>
-  </div>
-  <div id="tableContainer"></div>
-</div>
+  </header>
 
-<script>
-const REL_COLORS = {
-  친구: { bg: '#eaf4fb', color: '#2980b9' },
-  직장: { bg: '#eafaf1', color: '#27ae60' },
-  친척: { bg: '#fef9e7', color: '#d4ac0d' },
-  지인: { bg: '#f4ecf7', color: '#8e44ad' },
-  기타: { bg: '#f2f3f4', color: '#5d6d7e' },
-};
+  <main>
+    <div class="loading panel" id="loadingView">방 정보를 확인하고 있어요.</div>
 
-let entries = JSON.parse(localStorage.getItem('chukuigeum') || '[]');
+    <section class="lobby" id="lobbyView" hidden>
+      <div class="panel lobby-card">
+        <div class="setup-notice" id="setupNotice" hidden>
+          백엔드 연결 설정이 필요합니다. <code>config.js</code>에 Supabase 프로젝트 URL과 anon key를 입력해 주세요.
+        </div>
+        <div id="lobbyContent">
+          <div class="tabs" role="tablist" aria-label="방 입장 방식">
+            <button class="tab active" id="joinTab" type="button" role="tab" aria-selected="true">방 입장</button>
+            <button class="tab" id="createTab" type="button" role="tab" aria-selected="false">새 방 만들기</button>
+          </div>
 
-function save() {
-  localStorage.setItem('chukuigeum', JSON.stringify(entries));
-}
+          <form class="stack" id="joinForm" novalidate>
+            <div><h2 class="section-title">기존 방에 입장</h2><p class="section-copy">방 코드와 4자리 PIN을 입력하세요.</p></div>
+            <div class="form-group"><label for="joinCode">방 코드</label><input id="joinCode" maxlength="6" placeholder="예: A7K2M9" autocapitalize="characters" autocomplete="off" /></div>
+            <div class="form-group"><label for="joinPin">4자리 PIN</label><input class="pin-input" id="joinPin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" autocomplete="current-password" /></div>
+            <button class="primary-btn" id="joinBtn" type="submit">입장하기</button>
+            <p class="form-message" id="joinMessage" role="alert"></p>
+          </form>
 
-function formatWon(n) {
-  return n.toLocaleString('ko-KR') + '원';
-}
+          <form class="stack" id="createForm" novalidate hidden>
+            <div><h2 class="section-title">새 결혼식 방 만들기</h2><p class="section-copy">방마다 별도의 명단이 만들어집니다. 함께 기록할 사람에게 방 링크와 PIN을 알려주세요.</p></div>
+            <div class="form-group"><label for="roomTitleInput">결혼식 이름</label><input id="roomTitleInput" maxlength="60" placeholder="예: 민수 · 지영 결혼식" autocomplete="off" /></div>
+            <div class="form-group"><label for="createPin">4자리 PIN</label><input class="pin-input" id="createPin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" autocomplete="new-password" /></div>
+            <div class="form-group"><label for="confirmPin">PIN 확인</label><input class="pin-input" id="confirmPin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" autocomplete="new-password" /></div>
+            <button class="primary-btn" id="createBtn" type="submit">방 만들기</button>
+            <p class="form-message" id="createMessage" role="alert"></p>
+          </form>
+        </div>
+      </div>
+    </section>
 
-function setAmount(n) {
-  document.getElementById('amountInput').value = n;
-}
+    <section id="roomView" hidden>
+      <section class="summary" aria-label="전체 요약">
+        <article class="summary-card"><div class="label">총 축의금</div><div class="value" id="totalAmount">0원</div></article>
+        <article class="summary-card"><div class="label">하객 수</div><div class="value" id="totalGuests">0명</div></article>
+        <article class="summary-card"><div class="label">평균 금액</div><div class="value" id="avgAmount">0원</div></article>
+      </section>
 
-function addEntry() {
-  const name = document.getElementById('nameInput').value.trim();
-  const amount = parseInt(document.getElementById('amountInput').value);
-  const rel = document.getElementById('relInput').value;
+      <section class="panel" aria-labelledby="formTitle">
+        <h2 class="section-title" id="formTitle">하객 추가</h2>
+        <div class="edit-notice" id="editNotice"><span><strong id="editName"></strong>님의 기록을 수정하고 있어요.</span><button class="text-btn" id="cancelEditBtn" type="button">취소</button></div>
+        <form id="entryForm" novalidate>
+          <div class="form-row">
+            <div class="form-group"><label for="nameInput">이름</label><input id="nameInput" maxlength="40" placeholder="홍길동" autocomplete="off" /></div>
+            <div class="form-group"><label for="amountInput">금액 (원)</label><input id="amountInput" type="number" min="1" max="1000000000000" step="10000" inputmode="numeric" placeholder="50000" /></div>
+            <div class="form-group"><label for="relInput">관계</label><select id="relInput"><option>친구</option><option>직장</option><option>친척</option><option>지인</option><option>기타</option></select></div>
+            <button class="primary-btn" id="submitBtn" type="submit">추가</button>
+          </div>
+          <p class="form-message" id="formMessage" role="alert"></p>
+          <div class="quick-row" aria-label="금액 빠른 입력">
+            <span class="quick-label">빠른 입력</span>
+            <button class="quick-btn" type="button" data-amount="30000">3만</button><button class="quick-btn" type="button" data-amount="50000">5만</button><button class="quick-btn" type="button" data-amount="70000">7만</button><button class="quick-btn" type="button" data-amount="100000">10만</button><button class="quick-btn" type="button" data-amount="200000">20만</button><button class="quick-btn" type="button" data-amount="300000">30만</button><button class="quick-btn" type="button" data-amount="500000">50만</button>
+          </div>
+        </form>
+      </section>
 
-  if (!name) { alert('이름을 입력하세요.'); return; }
-  if (!amount || amount <= 0) { alert('금액을 입력하세요.'); return; }
+      <section aria-labelledby="listTitle">
+        <div class="list-header">
+          <div><h2 class="list-title" id="listTitle">하객 명단</h2><p class="result-summary" id="resultSummary"></p></div>
+          <div class="toolbar">
+            <label class="sr-only" for="filterRel">관계 필터</label><select id="filterRel"><option value="">전체 관계</option><option>친구</option><option>직장</option><option>친척</option><option>지인</option><option>기타</option></select>
+            <label class="sr-only" for="searchInput">이름 검색</label><input id="searchInput" type="search" placeholder="이름 검색" autocomplete="off" />
+            <button class="secondary-btn" id="exportBtn" type="button">CSV 저장</button>
+          </div>
+        </div>
+        <div class="table-wrap" id="tableContainer"></div>
+      </section>
+    </section>
+  </main>
 
-  entries.unshift({ id: Date.now(), name, amount, rel, date: new Date().toLocaleDateString('ko-KR') });
-  save();
-  render();
-
-  document.getElementById('nameInput').value = '';
-  document.getElementById('amountInput').value = '';
-  document.getElementById('nameInput').focus();
-}
-
-function deleteEntry(id) {
-  if (!confirm('삭제하시겠습니까?')) return;
-  entries = entries.filter(e => e.id !== id);
-  save();
-  render();
-}
-
-function filteredEntries() {
-  const rel = document.getElementById('filterRel').value;
-  const search = document.getElementById('searchInput').value.trim().toLowerCase();
-  return entries.filter(e =>
-    (!rel || e.rel === rel) &&
-    (!search || e.name.toLowerCase().includes(search))
-  );
-}
-
-function render() {
-  const list = filteredEntries();
-  const total = entries.reduce((s, e) => s + e.amount, 0);
-  const avg = entries.length ? Math.round(total / entries.length) : 0;
-
-  document.getElementById('totalAmount').textContent = formatWon(total);
-  document.getElementById('totalGuests').textContent = entries.length + '명';
-  document.getElementById('avgAmount').textContent = formatWon(avg);
-
-  const container = document.getElementById('tableContainer');
-  if (list.length === 0) {
-    container.innerHTML = '<div class="empty-msg">아직 등록된 하객이 없습니다.</div>';
-    return;
-  }
-
-  const rows = list.map(e => {
-    const c = REL_COLORS[e.rel] || REL_COLORS['기타'];
-    return `<tr>
-      <td>${e.date}</td>
-      <td><strong>${e.name}</strong></td>
-      <td><span class="rel-badge" style="background:${c.bg};color:${c.color}">${e.rel}</span></td>
-      <td class="amount-cell">${formatWon(e.amount)}</td>
-      <td><button class="del-btn" data-id="${e.id}" title="삭제">✕</button></td>
-    </tr>`;
-  }).join('');
-
-  container.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>날짜</th><th>이름</th><th>관계</th><th>금액</th><th></th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-}
-
-function exportCSV() {
-  if (!entries.length) { alert('데이터가 없습니다.'); return; }
-  const header = '날짜,이름,관계,금액\n';
-  const rows = entries.map(e => `${e.date},${e.name},${e.rel},${e.amount}`).join('\n');
-  const blob = new Blob(['﻿' + header + rows], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = '축의금_' + new Date().toLocaleDateString('ko-KR').replace(/\. /g, '-').replace('.', '') + '.csv';
-  a.click();
-}
-
-document.getElementById('addBtn').addEventListener('click', addEntry);
-
-document.getElementById('nameInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('amountInput').focus();
-});
-document.getElementById('amountInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') addEntry();
-});
-
-document.querySelectorAll('.quick-btn').forEach(btn => {
-  btn.addEventListener('click', () => setAmount(parseInt(btn.dataset.amount)));
-});
-
-document.getElementById('filterRel').addEventListener('change', render);
-document.getElementById('searchInput').addEventListener('input', render);
-document.getElementById('exportBtn').addEventListener('click', exportCSV);
-
-document.getElementById('tableContainer').addEventListener('click', e => {
-  const btn = e.target.closest('.del-btn');
-  if (btn) deleteEntry(parseInt(btn.dataset.id));
-});
-
-render();
-</script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
