@@ -19,6 +19,7 @@ const $ = id => document.getElementById(id);
 let accessToken = '';
 let room = null;
 let rooms = [];
+let roomSort = 'date-desc';
 let selectedRoomCode = '';
 let entries = [];
 let editingId = null;
@@ -145,7 +146,15 @@ function renderRoomList() {
     return;
   }
 
-  rooms.forEach(item => {
+  const sortedRooms = [...rooms].sort((a, b) => {
+    const byName = a.title.localeCompare(b.title, 'ko');
+    const byDate = Date.parse(a.createdAt) - Date.parse(b.createdAt);
+    if (roomSort === 'name-asc') return byName || a.code.localeCompare(b.code);
+    if (roomSort === 'name-desc') return -byName || a.code.localeCompare(b.code);
+    if (roomSort === 'date-asc') return byDate || a.code.localeCompare(b.code);
+    return -byDate || a.code.localeCompare(b.code);
+  });
+  sortedRooms.forEach(item => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'room-list-item';
@@ -552,6 +561,10 @@ async function copyShareLink() {
 
 function bindEvents() {
   $('joinTab').addEventListener('click', () => selectTab('join'));
+  $('roomSort').addEventListener('change', event => {
+    roomSort = event.target.value;
+    renderRoomList();
+  });
   $('createTab').addEventListener('click', () => selectTab('create'));
   $('masterTab').addEventListener('click', () => { selectTab('master'); loadRooms(); });
   $('joinForm').addEventListener('submit', joinRoom);

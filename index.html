@@ -40,6 +40,7 @@
 
           <form class="stack" id="joinForm" novalidate>
             <div><h2 class="section-title">결혼식 선택</h2><p class="section-copy">입장할 결혼식을 선택하세요.</p></div>
+            <div class="room-sort-row"><label for="roomSort">방 정렬</label><select id="roomSort"><option value="date-desc">생성일자순 · 최신순</option><option value="date-asc">생성일자순 · 오래된 순</option><option value="name-asc">이름순 · 가나다순</option><option value="name-desc">이름순 · 역순</option></select></div>
             <div class="room-list" id="roomList" aria-live="polite"></div>
             <div class="room-pin-panel" id="roomPinPanel" hidden>
               <div class="selected-room-row"><div><span class="selected-label">선택한 결혼식</span><strong id="selectedRoomTitle"></strong></div><button class="text-btn" id="changeRoomBtn" type="button">다시 선택</button></div>
