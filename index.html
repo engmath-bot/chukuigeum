@@ -35,6 +35,7 @@
           <div class="tabs" role="tablist" aria-label="방 입장 방식">
             <button class="tab active" id="joinTab" type="button" role="tab" aria-selected="true">방 선택</button>
             <button class="tab" id="createTab" type="button" role="tab" aria-selected="false">새 방 만들기</button>
+            <button class="tab" id="masterTab" type="button" role="tab" aria-selected="false">방 관리</button>
           </div>
 
           <form class="stack" id="joinForm" novalidate>
@@ -56,6 +57,20 @@
             <button class="primary-btn" id="createBtn" type="submit">방 만들기</button>
             <p class="form-message" id="createMessage" role="alert"></p>
           </form>
+
+          <section class="stack" id="masterPanel" aria-label="방 관리" hidden>
+            <div><h2 class="section-title">방 관리</h2><p class="section-copy">마스터 PIN을 입력하면 모든 결혼식 방의 이름을 수정하거나 방을 삭제할 수 있습니다.</p></div>
+            <form class="stack" id="masterLoginForm" novalidate>
+              <div class="form-group"><label for="masterPin">마스터 PIN</label><input class="pin-input" id="masterPin" type="password" inputmode="numeric" pattern="[0-9]{4,12}" minlength="4" maxlength="12" autocomplete="off" /></div>
+              <button class="primary-btn" id="masterLoginBtn" type="submit">관리 권한 열기</button>
+              <p class="form-message" id="masterLoginMessage" role="alert"></p>
+            </form>
+            <div class="stack" id="masterContent" hidden>
+              <div class="selected-room-row"><strong>결혼식 방 목록</strong><button class="text-btn" id="masterLogoutBtn" type="button">관리 종료</button></div>
+              <div class="master-room-list" id="masterRoomList"></div>
+              <p class="form-message" id="masterMessage" role="alert"></p>
+            </div>
+          </section>
         </div>
       </div>
     </section>
