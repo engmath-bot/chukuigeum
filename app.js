@@ -13,6 +13,8 @@ const $ = id => document.getElementById(id);
 
 let accessToken = '';
 let room = null;
+let rooms = [];
+let selectedRoomCode = '';
 let entries = [];
 let editingId = null;
 let refreshTimer = null;
@@ -75,7 +77,11 @@ function selectTab(name) {
   $('createTab').classList.toggle('active', !joining);
   $('joinTab').setAttribute('aria-selected', String(joining));
   $('createTab').setAttribute('aria-selected', String(!joining));
-  (joining ? $('joinCode') : $('roomTitleInput')).focus();
+  if (joining) {
+    if (selectedRoomCode) $('joinPin').focus();
+  } else {
+    $('roomTitleInput').focus();
+  }
 }
 
 function showLobby(tab = 'join') {
@@ -83,6 +89,7 @@ function showLobby(tab = 'join') {
   $('setupNotice').hidden = isConfigured();
   $('lobbyContent').hidden = !isConfigured();
   selectTab(tab);
+  if (tab === 'join') loadRooms();
 }
 
 function sessionKey(code) { return `chukuigeum-session-${code}`; }
@@ -106,12 +113,79 @@ function openRoom(data, token) {
   localStorage.setItem(sessionKey(room.code), token);
   updateRoomUrl(room.code);
   $('headerRoomTitle').textContent = room.title;
-  $('headerRoomCode').textContent = room.code;
   document.title = `${room.title} · 축의금 관리`;
   resetEntryForm();
   render();
   setView('room');
   startRoomSync();
+}
+
+function renderRoomList() {
+  const list = $('roomList');
+  list.replaceChildren();
+  if (!rooms.length) {
+    const empty = document.createElement('div');
+    empty.className = 'room-list-empty';
+    empty.textContent = '아직 개설된 결혼식이 없습니다. 새 방을 만들어 주세요.';
+    list.append(empty);
+    return;
+  }
+
+  rooms.forEach(item => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'room-list-item';
+    button.classList.toggle('active', item.code === selectedRoomCode);
+    button.dataset.roomCode = item.code;
+    const title = document.createElement('span');
+    title.className = 'room-list-title';
+    title.textContent = item.title;
+    const date = document.createElement('span');
+    date.className = 'room-list-date';
+    date.textContent = new Date(item.createdAt).toLocaleDateString('ko-KR');
+    button.append(title, date);
+    list.append(button);
+  });
+}
+
+async function loadRooms() {
+  if (!isConfigured()) return;
+  try {
+    const data = await rpc('list_rooms', {});
+    if (!data.ok) throw new Error(data.error);
+    rooms = Array.isArray(data.rooms) ? data.rooms : [];
+    renderRoomList();
+    if (selectedRoomCode) {
+      const selected = rooms.find(item => item.code === selectedRoomCode);
+      if (selected) {
+        $('selectedRoomTitle').textContent = selected.title;
+        $('roomPinPanel').hidden = false;
+      }
+    }
+  } catch (error) {
+    $('roomList').innerHTML = '<div class="room-list-empty">방 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</div>';
+  }
+}
+
+function selectRoom(code, focusPin = true) {
+  const selected = rooms.find(item => item.code === code);
+  if (!selected) return;
+  selectedRoomCode = code;
+  $('selectedRoomTitle').textContent = selected.title;
+  $('roomPinPanel').hidden = false;
+  $('joinMessage').textContent = '';
+  renderRoomList();
+  updateRoomUrl(code);
+  if (focusPin) $('joinPin').focus();
+}
+
+function clearRoomSelection() {
+  selectedRoomCode = '';
+  $('joinPin').value = '';
+  $('joinMessage').textContent = '';
+  $('roomPinPanel').hidden = true;
+  clearRoomUrl();
+  renderRoomList();
 }
 
 function startRoomSync() {
@@ -133,9 +207,9 @@ function startRoomSync() {
 
 async function joinRoom(event) {
   event.preventDefault();
-  const code = $('joinCode').value.trim().toUpperCase();
+  const code = selectedRoomCode;
   const pin = $('joinPin').value.trim();
-  if (!/^[A-Z0-9]{6}$/.test(code)) { $('joinMessage').textContent = '6자리 방 코드를 입력해 주세요.'; return; }
+  if (!code) { $('joinMessage').textContent = '입장할 결혼식을 선택해 주세요.'; return; }
   if (!/^\d{4}$/.test(pin)) { $('joinMessage').textContent = '숫자 4자리 PIN을 입력해 주세요.'; return; }
   setBusy($('joinBtn'), true, '확인 중…');
   try {
@@ -168,14 +242,14 @@ async function createRoom(event) {
 
 async function restoreSession(code) {
   const token = localStorage.getItem(sessionKey(code));
-  if (!token) { $('joinCode').value = code; showLobby('join'); return; }
+  if (!token) { selectedRoomCode = code; showLobby('join'); return; }
   try {
     const data = await rpc('get_room', { p_access_token: token });
     if (!data.ok) throw new Error(data.error);
     openRoom(data, token);
   } catch (error) {
     localStorage.removeItem(sessionKey(code));
-    $('joinCode').value = code;
+    selectedRoomCode = code;
     $('joinMessage').textContent = messageFor(error);
     showLobby('join');
   }
@@ -190,6 +264,7 @@ async function leaveRoom(revoke = true) {
   if (oldCode) localStorage.removeItem(sessionKey(oldCode));
   clearRoomUrl();
   document.title = '축의금 관리';
+  selectedRoomCode = '';
   showLobby('join');
   if (revoke && oldToken) rpc('leave_room', { p_access_token: oldToken }).catch(() => {});
 }
@@ -336,6 +411,11 @@ function bindEvents() {
   $('joinTab').addEventListener('click', () => selectTab('join'));
   $('createTab').addEventListener('click', () => selectTab('create'));
   $('joinForm').addEventListener('submit', joinRoom);
+  $('roomList').addEventListener('click', event => {
+    const button = event.target.closest('[data-room-code]');
+    if (button) selectRoom(button.dataset.roomCode);
+  });
+  $('changeRoomBtn').addEventListener('click', clearRoomSelection);
   $('createForm').addEventListener('submit', createRoom);
   $('entryForm').addEventListener('submit', submitEntry);
   $('cancelEditBtn').addEventListener('click', resetEntryForm);
@@ -343,7 +423,6 @@ function bindEvents() {
   $('leaveBtn').addEventListener('click', () => leaveRoom(true));
   $('homeBtn').addEventListener('click', () => room ? leaveRoom(true) : showLobby('join'));
   document.querySelectorAll('.pin-input').forEach(input => input.addEventListener('input', () => { input.value = input.value.replace(/\D/g, '').slice(0, 4); }));
-  $('joinCode').addEventListener('input', event => { event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); });
   document.querySelectorAll('.quick-btn').forEach(button => button.addEventListener('click', () => { $('amountInput').value = button.dataset.amount; $('amountInput').focus(); }));
   $('filterRel').addEventListener('change', render);
   $('searchInput').addEventListener('input', render);
@@ -358,9 +437,10 @@ function bindEvents() {
 async function boot() {
   bindEvents();
   if (!isConfigured()) { showLobby('create'); return; }
+  await loadRooms();
   const code = new URL(location.href).searchParams.get('room')?.trim().toUpperCase();
   if (code && /^[A-Z0-9]{6}$/.test(code)) await restoreSession(code);
-  else showLobby('create');
+  else showLobby('join');
 }
 
 boot();
