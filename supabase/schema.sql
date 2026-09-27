@@ -264,6 +264,36 @@ begin
 end;
 $$;
 
+create or replace function public.master_change_room_pin(p_master_token text, p_room_code text, p_new_pin text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_room_id uuid;
+begin
+  if not private.master_token_valid(p_master_token) then
+    return jsonb_build_object('ok', false, 'error', 'INVALID_MASTER_SESSION');
+  end if;
+  if p_room_code is null or p_new_pin is null
+    or p_room_code !~ '^[A-Z0-9]{6}$'
+    or p_new_pin !~ '^[0-9]{4}$' then
+    return jsonb_build_object('ok', false, 'error', 'INVALID_INPUT');
+  end if;
+
+  update public.rooms
+  set pin_hash = extensions.crypt(p_new_pin, extensions.gen_salt('bf', 12))
+  where code = p_room_code
+  returning id into v_room_id;
+  if not found then return jsonb_build_object('ok', false, 'error', 'ROOM_NOT_FOUND'); end if;
+
+  delete from public.room_sessions where room_id = v_room_id;
+  delete from public.room_pin_attempts where room_id = v_room_id;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
 create or replace function public.master_delete_room(p_master_token text, p_room_code text, p_confirm_title text)
 returns jsonb
 language plpgsql
@@ -480,6 +510,7 @@ revoke all on function public.list_rooms() from public;
 revoke all on function private.master_token_valid(text) from public;
 revoke all on function public.master_login(text) from public;
 revoke all on function public.master_rename_room(text, text, text) from public;
+revoke all on function public.master_change_room_pin(text, text, text) from public;
 revoke all on function public.master_delete_room(text, text, text) from public;
 revoke all on function public.master_logout(text) from public;
 revoke all on function public.join_room(text, text, text) from public;
@@ -493,6 +524,7 @@ grant execute on function public.create_room(text, text) to anon, authenticated;
 grant execute on function public.list_rooms() to anon, authenticated;
 grant execute on function public.master_login(text) to anon, authenticated;
 grant execute on function public.master_rename_room(text, text, text) to anon, authenticated;
+grant execute on function public.master_change_room_pin(text, text, text) to anon, authenticated;
 grant execute on function public.master_delete_room(text, text, text) to anon, authenticated;
 grant execute on function public.master_logout(text) to anon, authenticated;
 grant execute on function public.join_room(text, text, text) to anon, authenticated;
