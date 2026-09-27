@@ -12,7 +12,9 @@ const ERROR_MESSAGES = {
   MASTER_RATE_LIMITED: '마스터 PIN 입력 횟수를 초과했습니다. 10분 후 다시 시도해 주세요.',
   MASTER_NOT_CONFIGURED: '마스터 PIN이 아직 설정되지 않았습니다.',
   INVALID_MASTER_SESSION: '관리 권한이 만료되었습니다. 마스터 PIN을 다시 입력해 주세요.',
-  CONFIRMATION_MISMATCH: '방 이름이 변경되었습니다. 목록을 새로고침한 뒤 다시 확인해 주세요.'
+  CONFIRMATION_MISMATCH: '방 이름이 변경되었습니다. 목록을 새로고침한 뒤 다시 확인해 주세요.',
+  ENTRY_NOT_FOUND: '이 기록은 다른 사람이 삭제했습니다.',
+  EDIT_CONFLICT: '다른 사람이 이 기록을 먼저 수정했습니다.'
 };
 const $ = id => document.getElementById(id);
 
@@ -23,6 +25,7 @@ let roomSort = 'date-desc';
 let selectedRoomCode = '';
 let entries = [];
 let editingId = null;
+let editingUpdatedAt = null;
 let refreshTimer = null;
 let syncing = false;
 let masterToken = '';
@@ -485,11 +488,19 @@ function filteredEntries() {
 
 function resetEntryForm() {
   editingId = null;
+  editingUpdatedAt = null;
   $('entryForm').reset();
   $('formMessage').textContent = '';
   $('submitBtn').textContent = '추가';
   $('formTitle').textContent = '하객 추가';
   $('editNotice').classList.remove('active');
+}
+
+async function refreshEntries() {
+  const data = await rpc('get_room', { p_access_token: accessToken });
+  if (!data.ok) throw new Error(data.error);
+  entries = Array.isArray(data.entries) ? data.entries : [];
+  render();
 }
 
 async function submitEntry(event) {
@@ -503,8 +514,22 @@ async function submitEntry(event) {
   try {
     const functionName = editingId ? 'update_entry' : 'add_entry';
     const params = { p_access_token: accessToken, p_name: name, p_amount: amount, p_relation: relation };
-    if (editingId) params.p_entry_id = editingId;
-    const data = await rpc(functionName, params);
+    if (editingId) {
+      params.p_entry_id = editingId;
+      params.p_expected_updated_at = editingUpdatedAt;
+    } else {
+      params.p_allow_duplicate = false;
+    }
+    let data = await rpc(functionName, params);
+    if (!editingId && !data.ok && data.error === 'DUPLICATE_NAME') {
+      if (!confirm(`“${name}” 이름의 기록이 이미 있습니다. 동명이인 또는 별도 기록이 맞으면 추가할까요?`)) return;
+      data = await rpc('add_entry', { ...params, p_allow_duplicate: true });
+    }
+    if (!data.ok && (data.error === 'EDIT_CONFLICT' || data.error === 'ENTRY_NOT_FOUND')) {
+      try { await refreshEntries(); } catch (_) { /* 다음 자동 동기화에서 재시도합니다. */ }
+      $('formMessage').textContent = `${messageFor(data.error)} 최신 목록을 확인하고 수정을 취소한 뒤 다시 시작해 주세요. 현재 입력은 유지됩니다.`;
+      return;
+    }
     if (!data.ok) throw new Error(data.error);
     if (editingId) entries = entries.map(item => item.id === editingId ? data.entry : item);
     else entries.unshift(data.entry);
@@ -517,6 +542,7 @@ function startEdit(id) {
   const item = entries.find(entry => entry.id === id);
   if (!item) return;
   editingId = id;
+  editingUpdatedAt = item.updatedAt;
   $('nameInput').value = item.name;
   $('amountInput').value = item.amount;
   $('relInput').value = item.relation;
@@ -533,7 +559,14 @@ async function deleteEntry(id) {
   const item = entries.find(entry => entry.id === id);
   if (!item || !confirm(`${item.name}님의 기록을 삭제할까요?`)) return;
   try {
-    const data = await rpc('delete_entry', { p_access_token: accessToken, p_entry_id: id });
+    const data = await rpc('delete_entry', {
+      p_access_token: accessToken, p_entry_id: id, p_expected_updated_at: item.updatedAt
+    });
+    if (!data.ok && (data.error === 'EDIT_CONFLICT' || data.error === 'ENTRY_NOT_FOUND')) {
+      try { await refreshEntries(); } catch (_) { /* 다음 자동 동기화에서 재시도합니다. */ }
+      $('formMessage').textContent = `${messageFor(data.error)} 최신 목록을 확인한 뒤 다시 시도해 주세요.`;
+      return;
+    }
     if (!data.ok) throw new Error(data.error);
     entries = entries.filter(entry => entry.id !== id);
     if (editingId === id) resetEntryForm();
