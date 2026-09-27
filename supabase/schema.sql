@@ -412,7 +412,11 @@ begin
 end;
 $$;
 
-create or replace function public.add_entry(p_access_token text, p_name text, p_amount bigint, p_relation text)
+drop function if exists public.add_entry(text, text, bigint, text);
+create or replace function public.add_entry(
+  p_access_token text, p_name text, p_amount bigint, p_relation text,
+  p_allow_duplicate boolean default false
+)
 returns jsonb
 language plpgsql
 security definer
@@ -429,6 +433,15 @@ begin
     or p_amount not between 1 and 1000000000000
     or p_relation not in ('친구', '직장', '친척', '지인', '기타') then
     return jsonb_build_object('ok', false, 'error', 'INVALID_INPUT');
+  end if;
+
+  -- 같은 이름을 동시에 입력해도 두 번째 요청은 먼저 저장된 기록을 확인합니다.
+  perform pg_advisory_xact_lock(hashtext(v_room_id::text), hashtext(lower(p_name)));
+  if not coalesce(p_allow_duplicate, false) and exists (
+    select 1 from public.gift_entries
+    where room_id = v_room_id and lower(btrim(name)) = lower(p_name)
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'DUPLICATE_NAME');
   end if;
 
   insert into public.gift_entries (room_id, name, amount, relation)
@@ -443,7 +456,11 @@ begin
 end;
 $$;
 
-create or replace function public.update_entry(p_access_token text, p_entry_id uuid, p_name text, p_amount bigint, p_relation text)
+drop function if exists public.update_entry(text, uuid, text, bigint, text);
+create or replace function public.update_entry(
+  p_access_token text, p_entry_id uuid, p_name text, p_amount bigint, p_relation text,
+  p_expected_updated_at timestamptz
+)
 returns jsonb
 language plpgsql
 security definer
@@ -455,7 +472,7 @@ declare
 begin
   p_name := btrim(p_name);
   if v_room_id is null then return jsonb_build_object('ok', false, 'error', 'INVALID_SESSION'); end if;
-  if p_name is null or p_amount is null or p_relation is null
+  if p_name is null or p_amount is null or p_relation is null or p_expected_updated_at is null
     or char_length(p_name) not between 1 and 40
     or p_amount not between 1 and 1000000000000
     or p_relation not in ('친구', '직장', '친척', '지인', '기타') then
@@ -463,11 +480,17 @@ begin
   end if;
 
   update public.gift_entries
-  set name = p_name, amount = p_amount, relation = p_relation, updated_at = now()
-  where id = p_entry_id and room_id = v_room_id
+  set name = p_name, amount = p_amount, relation = p_relation,
+      updated_at = greatest(clock_timestamp(), updated_at + interval '1 microsecond')
+  where id = p_entry_id and room_id = v_room_id and updated_at = p_expected_updated_at
   returning * into v_entry;
 
-  if not found then return jsonb_build_object('ok', false, 'error', 'INVALID_INPUT'); end if;
+  if not found then
+    if exists (select 1 from public.gift_entries where id = p_entry_id and room_id = v_room_id) then
+      return jsonb_build_object('ok', false, 'error', 'EDIT_CONFLICT');
+    end if;
+    return jsonb_build_object('ok', false, 'error', 'ENTRY_NOT_FOUND');
+  end if;
   return jsonb_build_object('ok', true, 'entry', jsonb_build_object(
     'id', v_entry.id, 'name', v_entry.name, 'amount', v_entry.amount,
     'relation', v_entry.relation, 'giftedOn', v_entry.gifted_on,
@@ -476,7 +499,10 @@ begin
 end;
 $$;
 
-create or replace function public.delete_entry(p_access_token text, p_entry_id uuid)
+drop function if exists public.delete_entry(text, uuid);
+create or replace function public.delete_entry(
+  p_access_token text, p_entry_id uuid, p_expected_updated_at timestamptz
+)
 returns jsonb
 language plpgsql
 security definer
@@ -486,8 +512,15 @@ declare
   v_room_id uuid := private.room_id_for_token(p_access_token);
 begin
   if v_room_id is null then return jsonb_build_object('ok', false, 'error', 'INVALID_SESSION'); end if;
-  delete from public.gift_entries where id = p_entry_id and room_id = v_room_id;
-  if not found then return jsonb_build_object('ok', false, 'error', 'INVALID_INPUT'); end if;
+  if p_expected_updated_at is null then return jsonb_build_object('ok', false, 'error', 'INVALID_INPUT'); end if;
+  delete from public.gift_entries
+  where id = p_entry_id and room_id = v_room_id and updated_at = p_expected_updated_at;
+  if not found then
+    if exists (select 1 from public.gift_entries where id = p_entry_id and room_id = v_room_id) then
+      return jsonb_build_object('ok', false, 'error', 'EDIT_CONFLICT');
+    end if;
+    return jsonb_build_object('ok', false, 'error', 'ENTRY_NOT_FOUND');
+  end if;
   return jsonb_build_object('ok', true);
 end;
 $$;
@@ -515,9 +548,9 @@ revoke all on function public.master_delete_room(text, text, text) from public;
 revoke all on function public.master_logout(text) from public;
 revoke all on function public.join_room(text, text, text) from public;
 revoke all on function public.get_room(text) from public;
-revoke all on function public.add_entry(text, text, bigint, text) from public;
-revoke all on function public.update_entry(text, uuid, text, bigint, text) from public;
-revoke all on function public.delete_entry(text, uuid) from public;
+revoke all on function public.add_entry(text, text, bigint, text, boolean) from public;
+revoke all on function public.update_entry(text, uuid, text, bigint, text, timestamptz) from public;
+revoke all on function public.delete_entry(text, uuid, timestamptz) from public;
 revoke all on function public.leave_room(text) from public;
 
 grant execute on function public.create_room(text, text) to anon, authenticated;
@@ -529,7 +562,7 @@ grant execute on function public.master_delete_room(text, text, text) to anon, a
 grant execute on function public.master_logout(text) to anon, authenticated;
 grant execute on function public.join_room(text, text, text) to anon, authenticated;
 grant execute on function public.get_room(text) to anon, authenticated;
-grant execute on function public.add_entry(text, text, bigint, text) to anon, authenticated;
-grant execute on function public.update_entry(text, uuid, text, bigint, text) to anon, authenticated;
-grant execute on function public.delete_entry(text, uuid) to anon, authenticated;
+grant execute on function public.add_entry(text, text, bigint, text, boolean) to anon, authenticated;
+grant execute on function public.update_entry(text, uuid, text, bigint, text, timestamptz) to anon, authenticated;
+grant execute on function public.delete_entry(text, uuid, timestamptz) to anon, authenticated;
 grant execute on function public.leave_room(text) to anon, authenticated;
