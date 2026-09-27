@@ -18,6 +18,20 @@ window.CHUKUIGEUM_CONFIG = {
 
 5. 변경 내용을 `main` 브랜치에 반영하면 기존 GitHub Pages 주소에 배포됩니다.
 
+### 마스터 PIN 설정
+
+`supabase/schema.sql`을 적용한 뒤 SQL Editor에서 다음 쿼리의 `여기에_숫자_PIN`을 원하는 4~12자리 숫자로 바꿔 한 번 실행합니다. 모든 방의 이름 변경과 삭제 권한이 걸리므로 8자리 이상을 권장합니다. PIN 원문은 Git 저장소에 넣지 않습니다.
+
+```sql
+insert into private.master_config (id, pin_hash)
+values (true, extensions.crypt('여기에_숫자_PIN', extensions.gen_salt('bf', 12)))
+on conflict (id) do update
+set pin_hash = excluded.pin_hash, failed_count = 0, locked_until = null, updated_at = now();
+delete from private.master_sessions;
+```
+
+첫 화면의 **방 관리**에서 마스터 PIN으로 관리 권한을 열면 모든 방의 이름을 바꾸거나 삭제할 수 있습니다. 관리 세션은 2시간 후 만료됩니다. 방을 삭제하면 그 방의 축의금 기록과 접속 세션도 함께 삭제됩니다.
+
 `anon` key는 브라우저용 공개 키입니다. `service_role` key는 절대 `config.js`나 Git 저장소에 넣지 마세요.
 
 ## 접근 방식
@@ -29,6 +43,7 @@ window.CHUKUIGEUM_CONFIG = {
 - 각 데이터 작업은 접근 토큰이 속한 방 안에서만 수행됩니다.
 - 같은 기기에서 PIN을 5회 틀리면 10분 동안 재시도할 수 없습니다.
 - 데이터 테이블에는 RLS가 적용되어 공개 API 키로 직접 조회할 수 없습니다.
+- 마스터 PIN도 bcrypt 해시로 저장하며, 이름 변경·삭제는 관리 세션을 검사하는 서버 함수에서만 처리합니다.
 
 4자리 PIN은 공유 편의를 위한 간단한 접근 장치라서 강한 계정 인증을 대신하지는 않습니다. 더 높은 보안이 필요하면 사용자 계정과 이메일 초대 방식을 추가하는 편이 적합합니다.
 

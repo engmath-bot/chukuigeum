@@ -37,7 +37,7 @@ main { margin-top: -48px; padding-bottom: 48px; }
 
 .lobby { width: min(480px, 100%); margin: 0 auto; }
 .lobby-card { min-height: 390px; }
-.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 22px; padding: 4px; border-radius: 12px; background: #f2efec; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 22px; padding: 4px; border-radius: 12px; background: #f2efec; }
 .tab { height: 38px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-weight: 700; }
 .tab.active { background: #fff; color: var(--accent); box-shadow: 0 2px 8px rgba(68,48,39,.07); }
 .stack { display: grid; gap: 15px; }
@@ -63,6 +63,12 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px r
 .selected-room-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .selected-room-row strong { display: block; margin-top: 3px; }
 .selected-label { display: block; color: var(--muted); font-size: .72rem; }
+.master-room-list { display: grid; gap: 10px; }
+.master-room-item { display: grid; gap: 9px; border: 1px solid var(--line); border-radius: 12px; padding: 13px; }
+.master-room-actions { display: flex; gap: 7px; }
+.master-room-actions .secondary-btn { flex: 1; }
+.danger-btn { border-color: #e5b7b2; color: var(--accent-dark); }
+.danger-btn:hover { background: var(--accent-soft); }
 
 .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
 .summary-card { border-radius: 16px; padding: 20px; }

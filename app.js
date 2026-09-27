@@ -7,7 +7,12 @@ const ERROR_MESSAGES = {
   ROOM_NOT_FOUND: '방을 찾을 수 없습니다. 방 코드를 확인해 주세요.',
   INVALID_PIN: 'PIN이 올바르지 않습니다.',
   RATE_LIMITED: 'PIN 입력 횟수를 초과했습니다. 10분 후 다시 시도해 주세요.',
-  INVALID_SESSION: '입장 정보가 만료되었습니다. PIN을 다시 입력해 주세요.'
+  INVALID_SESSION: '입장 정보가 만료되었습니다. PIN을 다시 입력해 주세요.',
+  INVALID_MASTER_PIN: '마스터 PIN이 올바르지 않습니다.',
+  MASTER_RATE_LIMITED: '마스터 PIN 입력 횟수를 초과했습니다. 10분 후 다시 시도해 주세요.',
+  MASTER_NOT_CONFIGURED: '마스터 PIN이 아직 설정되지 않았습니다.',
+  INVALID_MASTER_SESSION: '관리 권한이 만료되었습니다. 마스터 PIN을 다시 입력해 주세요.',
+  CONFIRMATION_MISMATCH: '방 이름이 변경되었습니다. 목록을 새로고침한 뒤 다시 확인해 주세요.'
 };
 const $ = id => document.getElementById(id);
 
@@ -19,6 +24,7 @@ let entries = [];
 let editingId = null;
 let refreshTimer = null;
 let syncing = false;
+let masterToken = '';
 
 function isConfigured() {
   return /^https:\/\/.+\.supabase\.co$/.test(API_URL) && API_KEY.length > 20;
@@ -71,16 +77,24 @@ function setView(name) {
 
 function selectTab(name) {
   const joining = name === 'join';
+  const creating = name === 'create';
   $('joinForm').hidden = !joining;
-  $('createForm').hidden = joining;
+  $('createForm').hidden = !creating;
+  $('masterPanel').hidden = name !== 'master';
   $('joinTab').classList.toggle('active', joining);
-  $('createTab').classList.toggle('active', !joining);
+  $('createTab').classList.toggle('active', creating);
+  $('masterTab').classList.toggle('active', name === 'master');
   $('joinTab').setAttribute('aria-selected', String(joining));
-  $('createTab').setAttribute('aria-selected', String(!joining));
+  $('createTab').setAttribute('aria-selected', String(creating));
+  $('masterTab').setAttribute('aria-selected', String(name === 'master'));
   if (joining) {
     if (selectedRoomCode) $('joinPin').focus();
-  } else {
+  } else if (creating) {
     $('roomTitleInput').focus();
+  } else if (masterToken) {
+    renderMasterRooms();
+  } else {
+    $('masterPin').focus();
   }
 }
 
@@ -89,7 +103,7 @@ function showLobby(tab = 'join') {
   $('setupNotice').hidden = isConfigured();
   $('lobbyContent').hidden = !isConfigured();
   selectTab(tab);
-  if (tab === 'join') loadRooms();
+  if (tab === 'join' || tab === 'master') loadRooms();
 }
 
 function sessionKey(code) { return `chukuigeum-session-${code}`; }
@@ -148,6 +162,44 @@ function renderRoomList() {
   });
 }
 
+function renderMasterRooms() {
+  const list = $('masterRoomList');
+  list.replaceChildren();
+  if (!rooms.length) {
+    const empty = document.createElement('div');
+    empty.className = 'room-list-empty';
+    empty.textContent = '관리할 결혼식 방이 없습니다.';
+    list.append(empty);
+    return;
+  }
+  rooms.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'master-room-item';
+    row.dataset.roomCode = item.code;
+    const label = document.createElement('label');
+    label.textContent = `${item.title} 이름 수정`;
+    const input = document.createElement('input');
+    input.value = item.title;
+    input.maxLength = 60;
+    input.setAttribute('aria-label', `${item.title} 새 이름`);
+    const actions = document.createElement('div');
+    actions.className = 'master-room-actions';
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'secondary-btn';
+    save.dataset.masterAction = 'rename';
+    save.textContent = '이름 저장';
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'secondary-btn danger-btn';
+    remove.dataset.masterAction = 'delete';
+    remove.textContent = '방 삭제';
+    actions.append(save, remove);
+    row.append(label, input, actions);
+    list.append(row);
+  });
+}
+
 async function loadRooms() {
   if (!isConfigured()) return;
   try {
@@ -155,6 +207,7 @@ async function loadRooms() {
     if (!data.ok) throw new Error(data.error);
     rooms = Array.isArray(data.rooms) ? data.rooms : [];
     renderRoomList();
+    if (masterToken) renderMasterRooms();
     if (selectedRoomCode) {
       const selected = rooms.find(item => item.code === selectedRoomCode);
       if (selected) {
@@ -196,8 +249,14 @@ function startRoomSync() {
     try {
       const data = await rpc('get_room', { p_access_token: accessToken });
       if (data.ok) {
+        room = data.room;
+        $('headerRoomTitle').textContent = room.title;
+        document.title = `${room.title} · 축의금 관리`;
         entries = Array.isArray(data.entries) ? data.entries : [];
         render();
+      } else if (data.error === 'INVALID_SESSION') {
+        await leaveRoom(false);
+        $('joinMessage').textContent = '방이 삭제되었거나 입장 정보가 만료되었습니다.';
       }
     } catch (_) {
       // 일시적인 네트워크 오류는 다음 동기화에서 다시 시도합니다.
@@ -238,6 +297,90 @@ async function createRoom(event) {
     openRoom(data, data.accessToken);
   } catch (error) { $('createMessage').textContent = messageFor(error); }
   finally { setBusy($('createBtn'), false); }
+}
+
+async function masterLogin(event) {
+  event.preventDefault();
+  const pin = $('masterPin').value.trim();
+  if (!/^[0-9]{4,12}$/.test(pin)) {
+    $('masterLoginMessage').textContent = '숫자 4~12자리 마스터 PIN을 입력해 주세요.';
+    return;
+  }
+  setBusy($('masterLoginBtn'), true, '확인 중…');
+  try {
+    const data = await rpc('master_login', { p_pin: pin });
+    if (!data.ok) throw new Error(data.error);
+    masterToken = data.masterToken;
+    $('masterPin').value = '';
+    $('masterLoginMessage').textContent = '';
+    $('masterLoginForm').hidden = true;
+    $('masterContent').hidden = false;
+    await loadRooms();
+  } catch (error) { $('masterLoginMessage').textContent = messageFor(error); }
+  finally { setBusy($('masterLoginBtn'), false); }
+}
+
+function masterLogout(revoke = true) {
+  const oldToken = masterToken;
+  masterToken = '';
+  $('masterLoginForm').hidden = false;
+  $('masterContent').hidden = true;
+  $('masterPin').value = '';
+  $('masterMessage').textContent = '';
+  if (revoke && oldToken) rpc('master_logout', { p_master_token: oldToken }).catch(() => {});
+}
+
+function handleMasterError(error) {
+  if (error?.message === 'INVALID_MASTER_SESSION') {
+    masterLogout(false);
+    $('masterLoginMessage').textContent = messageFor(error);
+  } else {
+    $('masterMessage').textContent = messageFor(error);
+  }
+}
+
+async function masterRenameRoom(row, button) {
+  const code = row.dataset.roomCode;
+  const title = row.querySelector('input').value.trim();
+  if (!title || title.length > 60) {
+    $('masterMessage').textContent = '결혼식 이름을 1~60자로 입력해 주세요.';
+    return;
+  }
+  setBusy(button, true, '저장 중…');
+  try {
+    const data = await rpc('master_rename_room', { p_master_token: masterToken, p_room_code: code, p_title: title });
+    if (!data.ok) throw new Error(data.error);
+    rooms = rooms.map(item => item.code === code ? data.room : item);
+    renderRoomList();
+    renderMasterRooms();
+    if (selectedRoomCode === code) $('selectedRoomTitle').textContent = title;
+    $('masterMessage').textContent = '결혼식 이름을 변경했습니다.';
+  } catch (error) { handleMasterError(error); }
+  finally { setBusy(button, false); }
+}
+
+async function masterDeleteRoom(row, button) {
+  const code = row.dataset.roomCode;
+  const item = rooms.find(roomItem => roomItem.code === code);
+  if (!item) return;
+  const answer = prompt(`“${item.title}” 방과 모든 축의금 기록을 삭제합니다. 계속하려면 방 이름을 그대로 입력해 주세요.`);
+  if (answer === null) return;
+  if (answer !== item.title) {
+    $('masterMessage').textContent = '방 이름이 일치하지 않아 삭제하지 않았습니다.';
+    return;
+  }
+  setBusy(button, true, '삭제 중…');
+  try {
+    const data = await rpc('master_delete_room', { p_master_token: masterToken, p_room_code: code, p_confirm_title: item.title });
+    if (!data.ok) throw new Error(data.error);
+    rooms = rooms.filter(roomItem => roomItem.code !== code);
+    localStorage.removeItem(sessionKey(code));
+    if (selectedRoomCode === code) clearRoomSelection();
+    renderRoomList();
+    renderMasterRooms();
+    $('masterMessage').textContent = `“${item.title}” 방을 삭제했습니다.`;
+  } catch (error) { handleMasterError(error); }
+  finally { setBusy(button, false); }
 }
 
 async function restoreSession(code) {
@@ -410,6 +553,7 @@ async function copyShareLink() {
 function bindEvents() {
   $('joinTab').addEventListener('click', () => selectTab('join'));
   $('createTab').addEventListener('click', () => selectTab('create'));
+  $('masterTab').addEventListener('click', () => { selectTab('master'); loadRooms(); });
   $('joinForm').addEventListener('submit', joinRoom);
   $('roomList').addEventListener('click', event => {
     const button = event.target.closest('[data-room-code]');
@@ -417,12 +561,22 @@ function bindEvents() {
   });
   $('changeRoomBtn').addEventListener('click', clearRoomSelection);
   $('createForm').addEventListener('submit', createRoom);
+  $('masterLoginForm').addEventListener('submit', masterLogin);
+  $('masterLogoutBtn').addEventListener('click', () => masterLogout(true));
+  $('masterRoomList').addEventListener('click', event => {
+    const button = event.target.closest('[data-master-action]');
+    const row = button?.closest('[data-room-code]');
+    if (!row) return;
+    $('masterMessage').textContent = '';
+    if (button.dataset.masterAction === 'rename') masterRenameRoom(row, button);
+    else masterDeleteRoom(row, button);
+  });
   $('entryForm').addEventListener('submit', submitEntry);
   $('cancelEditBtn').addEventListener('click', resetEntryForm);
   $('shareBtn').addEventListener('click', copyShareLink);
   $('leaveBtn').addEventListener('click', () => leaveRoom(true));
   $('homeBtn').addEventListener('click', () => room ? leaveRoom(true) : showLobby('join'));
-  document.querySelectorAll('.pin-input').forEach(input => input.addEventListener('input', () => { input.value = input.value.replace(/\D/g, '').slice(0, 4); }));
+  document.querySelectorAll('.pin-input').forEach(input => input.addEventListener('input', () => { input.value = input.value.replace(/\D/g, '').slice(0, input.id === 'masterPin' ? 12 : 4); }));
   document.querySelectorAll('.quick-btn').forEach(button => button.addEventListener('click', () => { $('amountInput').value = button.dataset.amount; $('amountInput').focus(); }));
   $('filterRel').addEventListener('change', render);
   $('searchInput').addEventListener('input', render);
