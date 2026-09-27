@@ -44,13 +44,46 @@ create table if not exists public.room_pin_attempts (
   primary key (room_id, attempt_key)
 );
 
+create table if not exists private.master_config (
+  id boolean primary key default true check (id),
+  pin_hash text not null,
+  failed_count integer not null default 0,
+  locked_until timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists private.master_sessions (
+  token_hash text primary key,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
 alter table public.rooms enable row level security;
 alter table public.gift_entries enable row level security;
 alter table public.room_sessions enable row level security;
 alter table public.room_pin_attempts enable row level security;
+alter table private.master_config enable row level security;
+alter table private.master_sessions enable row level security;
 
 revoke all on public.rooms, public.gift_entries, public.room_sessions, public.room_pin_attempts from anon, authenticated;
 revoke all on schema private from public, anon, authenticated;
+revoke all on private.master_config, private.master_sessions from public, anon, authenticated;
+
+create or replace function private.master_token_valid(p_master_token text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    exists (
+      select 1 from private.master_sessions
+      where token_hash = encode(extensions.digest(p_master_token, 'sha256'), 'hex')
+        and expires_at > now()
+    ), false
+  );
+$$;
 
 create or replace function private.room_id_for_token(p_access_token text)
 returns uuid
@@ -157,6 +190,113 @@ as $$
     )
   )
   from public.rooms;
+$$;
+
+create or replace function public.master_login(p_pin text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_config private.master_config%rowtype;
+  v_token text;
+  v_expires_at timestamptz := now() + interval '2 hours';
+begin
+  if p_pin is null or p_pin !~ '^[0-9]{4,12}$' then
+    return jsonb_build_object('ok', false, 'error', 'INVALID_INPUT');
+  end if;
+
+  select * into v_config from private.master_config where id = true for update;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'MASTER_NOT_CONFIGURED');
+  end if;
+  if v_config.locked_until > now() then
+    return jsonb_build_object('ok', false, 'error', 'MASTER_RATE_LIMITED');
+  end if;
+  if v_config.pin_hash <> extensions.crypt(p_pin, v_config.pin_hash) then
+    update private.master_config
+    set failed_count = case when updated_at < now() - interval '10 minutes' then 1 else failed_count + 1 end,
+        locked_until = case
+          when (case when updated_at < now() - interval '10 minutes' then 1 else failed_count + 1 end) >= 5
+            then now() + interval '10 minutes'
+          else null
+        end,
+        updated_at = now()
+    where id = true;
+    return jsonb_build_object('ok', false, 'error', 'INVALID_MASTER_PIN');
+  end if;
+
+  update private.master_config
+  set failed_count = 0, locked_until = null, updated_at = now()
+  where id = true;
+  delete from private.master_sessions where expires_at <= now();
+  v_token := encode(extensions.gen_random_bytes(32), 'hex');
+  insert into private.master_sessions (token_hash, expires_at)
+  values (encode(extensions.digest(v_token, 'sha256'), 'hex'), v_expires_at);
+  return jsonb_build_object('ok', true, 'masterToken', v_token, 'expiresAt', v_expires_at);
+end;
+$$;
+
+create or replace function public.master_rename_room(p_master_token text, p_room_code text, p_title text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_room public.rooms%rowtype;
+begin
+  if not private.master_token_valid(p_master_token) then
+    return jsonb_build_object('ok', false, 'error', 'INVALID_MASTER_SESSION');
+  end if;
+  p_title := btrim(p_title);
+  if p_room_code is null or p_title is null
+    or p_room_code !~ '^[A-Z0-9]{6}$'
+    or char_length(p_title) not between 1 and 60 then
+    return jsonb_build_object('ok', false, 'error', 'INVALID_INPUT');
+  end if;
+  update public.rooms set title = p_title where code = p_room_code returning * into v_room;
+  if not found then return jsonb_build_object('ok', false, 'error', 'ROOM_NOT_FOUND'); end if;
+  return jsonb_build_object('ok', true, 'room', jsonb_build_object(
+    'code', v_room.code, 'title', v_room.title, 'createdAt', v_room.created_at
+  ));
+end;
+$$;
+
+create or replace function public.master_delete_room(p_master_token text, p_room_code text, p_confirm_title text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not private.master_token_valid(p_master_token) then
+    return jsonb_build_object('ok', false, 'error', 'INVALID_MASTER_SESSION');
+  end if;
+  if p_room_code is null or p_confirm_title is null or p_room_code !~ '^[A-Z0-9]{6}$' then
+    return jsonb_build_object('ok', false, 'error', 'INVALID_INPUT');
+  end if;
+  if not exists (select 1 from public.rooms where code = p_room_code) then
+    return jsonb_build_object('ok', false, 'error', 'ROOM_NOT_FOUND');
+  end if;
+  delete from public.rooms where code = p_room_code and title = p_confirm_title;
+  if not found then return jsonb_build_object('ok', false, 'error', 'CONFIRMATION_MISMATCH'); end if;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.master_logout(p_master_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from private.master_sessions
+  where token_hash = encode(extensions.digest(p_master_token, 'sha256'), 'hex');
+  return jsonb_build_object('ok', true);
+end;
 $$;
 
 create or replace function public.join_room(p_room_code text, p_pin text, p_attempt_key text)
@@ -337,6 +477,11 @@ $$;
 
 revoke all on function public.create_room(text, text) from public;
 revoke all on function public.list_rooms() from public;
+revoke all on function private.master_token_valid(text) from public;
+revoke all on function public.master_login(text) from public;
+revoke all on function public.master_rename_room(text, text, text) from public;
+revoke all on function public.master_delete_room(text, text, text) from public;
+revoke all on function public.master_logout(text) from public;
 revoke all on function public.join_room(text, text, text) from public;
 revoke all on function public.get_room(text) from public;
 revoke all on function public.add_entry(text, text, bigint, text) from public;
@@ -346,6 +491,10 @@ revoke all on function public.leave_room(text) from public;
 
 grant execute on function public.create_room(text, text) to anon, authenticated;
 grant execute on function public.list_rooms() to anon, authenticated;
+grant execute on function public.master_login(text) to anon, authenticated;
+grant execute on function public.master_rename_room(text, text, text) to anon, authenticated;
+grant execute on function public.master_delete_room(text, text, text) to anon, authenticated;
+grant execute on function public.master_logout(text) to anon, authenticated;
 grant execute on function public.join_room(text, text, text) to anon, authenticated;
 grant execute on function public.get_room(text) to anon, authenticated;
 grant execute on function public.add_entry(text, text, bigint, text) to anon, authenticated;
